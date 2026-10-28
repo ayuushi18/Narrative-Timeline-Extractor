@@ -1,0 +1,24 @@
+# ─────────────────────────────────────────────────────────────
+# Narrative Timeline Extractor — Requirements
+# ─────────────────────────────────────────────────────────────
+# Install with:  pip install -r requirements.txt
+
+# Core web framework
+streamlit>=1.32.0
+
+# Data handling & visualisation
+pandas>=2.0
+numpy>=1.24
+matplotlib>=3.7
+
+# Optional — for better NER (uncomment if you have internet access)
+# spacy>=3.7
+# After installing spaCy, run:
+#   python -m spacy download en_core_web_sm
+
+# Optional — transformer-based models (GPU recommended)
+# transformers>=4.35
+# torch>=2.0
+
+# Utilities (standard library — no install needed)
+# re, math, csv, io, json, datetime, collections, unicodedata

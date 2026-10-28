@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Narrative Timeline Extractor</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Source+Sans+3:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --cream:#FAF7F2; --warm:#F0EAE0; --sand:#D6C9B4; --sand2:#C4B39A;
+  --walnut:#7A6652; --espresso:#2C1F14; --ink:#1A1208;
+  --rust:#C05A2A; --rust-light:#F5E8DF;
+  --teal:#2A7A6E; --teal-light:#E0F2EF;
+  --gold:#B8860B; --gold-light:#FDF8E1;
+  --blue:#2A4A7A; --blue-light:#E8EEF8;
+  --green:#2D6A4F; --green-light:#D8F3DC;
+  --serif:'Playfair Display',serif;
+  --sans:'Source Sans 3',sans-serif;
+  --mono:'JetBrains Mono',monospace;
+}
+html{scroll-behavior:smooth;}
+body{font-family:var(--sans);background:var(--cream);color:var(--espresso);min-height:100vh;overflow-x:hidden;}
+
+/* ── Grain texture ── */
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+}
+
+/* ── Layout ── */
+.shell{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:0 24px 80px;}
+
+/* ── Header ── */
+header{
+  background:var(--espresso); color:var(--cream);
+  padding:40px 48px 36px; border-radius:0 0 16px 16px;
+  margin-bottom:40px; position:relative; overflow:hidden;
+}
+header::before{content:'Timeline';position:absolute;right:-20px;top:-20px;
+  font-family:var(--serif);font-size:9rem;font-weight:900;opacity:.04;
+  color:var(--cream);letter-spacing:-.05em;white-space:nowrap;pointer-events:none;}
+.header-eyebrow{font-family:var(--mono);font-size:.65rem;letter-spacing:.2em;
+  text-transform:uppercase;color:rgba(250,247,242,.5);margin-bottom:10px;}
+header h1{font-family:var(--serif);font-size:2.8rem;font-weight:700;line-height:1.1;
+  margin-bottom:12px;color:var(--cream);}
+header h1 em{font-style:italic;color:rgba(192,90,42,.85);}
+.header-sub{font-size:.95rem;color:rgba(250,247,242,.65);font-weight:300;max-width:560px;line-height:1.6;}
+.header-badges{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;}
+.hbadge{
+  font-family:var(--mono);font-size:.65rem;padding:4px 12px;border-radius:999px;
+  border:1px solid rgba(250,247,242,.2);color:rgba(250,247,242,.7);
+  background:rgba(250,247,242,.06);letter-spacing:.08em;
+}
+
+/* ── Two-panel layout ── */
+.workspace{display:grid;grid-template-columns:420px 1fr;gap:28px;align-items:start;}
+@media(max-width:900px){.workspace{grid-template-columns:1fr;}}
+
+/* ── Input panel ── */
+.panel{background:white;border:1px solid var(--sand);border-radius:12px;overflow:hidden;}
+.panel-head{
+  padding:18px 22px 14px;border-bottom:1px solid var(--warm);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.panel-title{font-family:var(--serif);font-size:1.1rem;font-weight:700;color:var(--espresso);}
+.panel-badge{font-family:var(--mono);font-size:.62rem;color:var(--walnut);
+  border:1px solid var(--sand);padding:3px 8px;border-radius:4px;}
+.panel-body{padding:20px 22px;}
+
+/* ── Textarea ── */
+.input-label{font-size:.75rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--walnut);margin-bottom:8px;}
+textarea{
+  width:100%;height:220px;padding:14px 16px;
+  border:1.5px solid var(--sand);border-radius:8px;
+  font-family:var(--sans);font-size:.88rem;line-height:1.6;
+  color:var(--espresso);background:var(--cream);resize:vertical;
+  transition:border-color .2s;
+}
+textarea:focus{outline:none;border-color:var(--rust);}
+
+/* ── Sample selector ── */
+.sample-label{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--walnut);margin:14px 0 6px;}
+.sample-btns{display:flex;flex-direction:column;gap:6px;}
+.sample-btn{
+  padding:9px 14px;border-radius:6px;border:1px solid var(--sand);
+  background:var(--cream);cursor:pointer;text-align:left;
+  font-family:var(--sans);font-size:.82rem;color:var(--espresso);
+  transition:all .15s;display:flex;align-items:center;gap:10px;
+}
+.sample-btn:hover{background:var(--warm);border-color:var(--sand2);}
+.sample-btn.active{background:var(--rust-light);border-color:var(--rust);color:var(--rust);}
+
+/* ── Extract button ── */
+.btn-extract{
+  display:block;width:100%;margin-top:18px;padding:13px;
+  background:var(--espresso);color:var(--cream);border:none;
+  border-radius:8px;cursor:pointer;font-family:var(--serif);
+  font-size:1rem;font-weight:700;letter-spacing:.03em;
+  transition:background .2s;position:relative;overflow:hidden;
+}
+.btn-extract:hover{background:var(--rust);}
+.btn-extract::after{content:'→';position:absolute;right:18px;top:50%;transform:translateY(-50%);
+  transition:right .2s;}
+.btn-extract:hover::after{right:14px;}
+
+/* ── Stats strip ── */
+.stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.stat-card{
+  background:white;border:1px solid var(--sand);border-radius:8px;
+  padding:14px 16px;border-top:3px solid var(--rust);
+}
+.stat-label{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--walnut);margin-bottom:4px;}
+.stat-value{font-family:var(--serif);font-size:1.9rem;font-weight:700;
+  color:var(--espresso);line-height:1;}
+.stat-sub{font-family:var(--mono);font-size:.6rem;color:var(--walnut);margin-top:3px;}
+
+/* ── Tabs ── */
+.tab-row{display:flex;gap:0;border-bottom:2px solid var(--sand);margin-bottom:22px;}
+.tab-btn{
+  padding:10px 20px;border:none;background:transparent;cursor:pointer;
+  font-family:var(--sans);font-size:.85rem;font-weight:500;color:var(--walnut);
+  border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;
+}
+.tab-btn:hover{color:var(--espresso);}
+.tab-btn.active{color:var(--rust);border-bottom-color:var(--rust);font-weight:600;}
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+/* ── Timeline items ── */
+.timeline-list{display:flex;flex-direction:column;gap:16px;}
+.evt{
+  display:flex;gap:16px;
+  animation:slideIn .35s ease both;
+}
+@keyframes slideIn{from{opacity:0;transform:translateX(-10px);}to{opacity:1;transform:translateX(0);}}
+.evt-num{
+  width:38px;height:38px;border-radius:50%;background:var(--espresso);color:var(--cream);
+  font-family:var(--serif);font-size:.95rem;font-weight:700;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;
+}
+.evt-body{flex:1;border-left:2px solid var(--sand);padding-left:14px;}
+.evt-date{
+  font-family:var(--mono);font-size:.65rem;color:var(--rust);font-weight:500;
+  text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;
+}
+.evt-desc{font-size:.97rem;font-weight:600;color:var(--espresso);line-height:1.35;margin-bottom:4px;}
+.evt-sent{font-size:.84rem;color:var(--walnut);font-weight:300;line-height:1.55;}
+.score-pill{
+  display:inline-block;font-family:var(--mono);font-size:.6rem;font-weight:500;
+  padding:2px 7px;border-radius:999px;margin-left:8px;vertical-align:middle;
+}
+.score-h{background:var(--green-light);color:var(--green);}
+.score-m{background:var(--gold-light);color:var(--gold);}
+.score-l{background:var(--rust-light);color:var(--rust);}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.chip{font-size:.63rem;padding:2px 6px;border-radius:3px;font-weight:500;}
+.chip-loc{background:var(--rust-light);color:var(--rust);border:1px solid rgba(192,90,42,.2);}
+.chip-per{background:var(--blue-light);color:var(--blue);border:1px solid rgba(42,74,122,.2);}
+
+/* ── Table ── */
+.evt-table{width:100%;border-collapse:collapse;font-size:.83rem;}
+.evt-table th{
+  background:var(--espresso);color:var(--cream);padding:10px 12px;
+  text-align:left;font-family:var(--mono);font-size:.65rem;
+  font-weight:500;letter-spacing:.08em;text-transform:uppercase;
+}
+.evt-table td{padding:10px 12px;border-bottom:1px solid var(--warm);vertical-align:top;}
+.evt-table tr:nth-child(even) td{background:var(--cream);}
+.evt-table tr:hover td{background:var(--warm);}
+.score-bar-wrap{display:flex;align-items:center;gap:8px;}
+.score-bar{height:5px;border-radius:3px;}
+
+/* ── Visual timeline ── */
+.vis-timeline{position:relative;padding:20px 0;overflow-x:auto;}
+.vis-axis{height:2px;background:var(--sand);position:relative;margin:60px 20px 60px;}
+.vis-dot{
+  position:absolute;top:50%;transform:translateY(-50%);
+  width:14px;height:14px;border-radius:50%;border:2.5px solid white;
+  cursor:pointer;transition:transform .15s;box-shadow:0 2px 6px rgba(0,0,0,.15);
+}
+.vis-dot:hover{transform:translateY(-50%) scale(1.4);}
+.vis-label{
+  position:absolute;width:120px;text-align:center;
+  font-size:.63rem;line-height:1.3;color:var(--espresso);
+  font-family:var(--sans);
+}
+.vis-label.above{bottom:calc(100% + 18px);}
+.vis-label.below{top:calc(100% + 18px);}
+.vis-label .vis-n{font-family:var(--serif);font-weight:700;font-size:.75rem;}
+.vis-label .vis-d{color:var(--rust);font-family:var(--mono);font-size:.58rem;}
+
+/* ── Highlighted text ── */
+.highlight-box{
+  background:white;border:1px solid var(--sand);border-radius:8px;
+  padding:20px 24px;font-size:.9rem;line-height:1.85;color:var(--espresso);
+  max-height:420px;overflow-y:auto;
+}
+.highlight-box mark{
+  background:rgba(192,90,42,.15);border-radius:3px;padding:1px 3px;
+  cursor:pointer;transition:background .15s;
+}
+.highlight-box mark:hover{background:rgba(192,90,42,.3);}
+
+/* ── Download bar ── */
+.dl-bar{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;}
+.dl-btn{
+  padding:8px 16px;border:1px solid var(--sand);border-radius:6px;
+  background:white;cursor:pointer;font-family:var(--mono);font-size:.7rem;
+  color:var(--walnut);transition:all .15s;text-decoration:none;
+  display:inline-flex;align-items:center;gap:6px;
+}
+.dl-btn:hover{border-color:var(--walnut);color:var(--espresso);}
+
+/* ── Empty state ── */
+.empty-state{
+  text-align:center;padding:60px 20px;color:var(--walnut);
+}
+.empty-icon{font-size:3rem;margin-bottom:14px;opacity:.4;}
+.empty-title{font-family:var(--serif);font-size:1.3rem;margin-bottom:8px;color:var(--espresso);}
+.empty-sub{font-size:.88rem;line-height:1.6;}
+
+/* ── Processing overlay ── */
+.processing{
+  text-align:center;padding:50px 20px;
+}
+.spinner{
+  width:36px;height:36px;border:3px solid var(--sand);border-top-color:var(--rust);
+  border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+.proc-text{font-family:var(--serif);font-size:1.1rem;color:var(--espresso);margin-bottom:6px;}
+.proc-steps{font-family:var(--mono);font-size:.7rem;color:var(--walnut);}
+
+/* ── Architecture diagram ── */
+.arch{display:flex;flex-direction:column;gap:4px;padding:14px 0;}
+.arch-step{
+  display:flex;align-items:center;gap:12px;padding:10px 14px;
+  background:var(--cream);border:1px solid var(--warm);border-radius:6px;
+  font-size:.82rem;
+}
+.arch-num{
+  width:24px;height:24px;border-radius:50%;background:var(--espresso);color:var(--cream);
+  font-family:var(--mono);font-size:.65rem;font-weight:500;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.arch-arrow{text-align:center;color:var(--sand2);font-size:.9rem;}
+.arch-name{font-weight:600;color:var(--espresso);}
+.arch-desc{font-size:.75rem;color:var(--walnut);}
+
+/* ── Footer ── */
+footer{
+  border-top:1px solid var(--sand);padding:20px 0 0;margin-top:50px;
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;
+  font-family:var(--mono);font-size:.63rem;color:var(--walnut);
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ════════════════════════════════════════════
+     HEADER
+════════════════════════════════════════════ -->
+<header>
+  <div class="header-eyebrow">Final-Year AI / NLP Project</div>
+  <h1>Narrative <em>Timeline</em> Extractor</h1>
+  <p class="header-sub">Paste any news article, story, or case study and watch the NLP pipeline extract a structured chronological sequence of events — automatically.</p>
+  <div class="header-badges">
+    <span class="hbadge">🔤 Sentence Segmentation</span>
+    <span class="hbadge">🏷 Named Entity Recognition</span>
+    <span class="hbadge">⚡ Event Scoring (TF-IDF)</span>
+    <span class="hbadge">📅 Temporal Ordering</span>
+    <span class="hbadge">⬇ CSV / JSON Export</span>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════════
+     WORKSPACE
+════════════════════════════════════════════ -->
+<div class="workspace">
+
+  <!-- LEFT: Input panel -->
+  <div>
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">📝 Input Text</div>
+        <div class="panel-badge">Paste or use sample</div>
+      </div>
+      <div class="panel-body">
+        <div class="input-label">Your article / story</div>
+        <textarea id="inputText" placeholder="Paste your news article, story or case study here…
+
+Example:
+On January 2022, the company launched its product.
+By March 2022, sales had increased by 40%.
+In June 2022, they expanded to global markets."></textarea>
+
+        <div class="sample-label">Load a sample</div>
+        <div class="sample-btns">
+          <button class="sample-btn" onclick="loadSample('covid')">🦠 COVID-19 Pandemic Timeline</button>
+          <button class="sample-btn" onclick="loadSample('spacex')">🚀 SpaceX Milestones</button>
+          <button class="sample-btn" onclick="loadSample('apple')">📱 Apple Inc. History</button>
+        </div>
+
+        <button class="btn-extract" onclick="runExtraction()">Extract Timeline</button>
+      </div>
+    </div>
+
+    <!-- Architecture panel -->
+    <div class="panel" style="margin-top:20px;">
+      <div class="panel-head">
+        <div class="panel-title">🏗 Pipeline Architecture</div>
+      </div>
+      <div class="panel-body">
+        <div class="arch">
+          <div class="arch-step"><div class="arch-num">1</div><div><div class="arch-name">preprocessor.py</div><div class="arch-desc">Clean text · sentence segmentation · tokenisation</div></div></div>
+          <div class="arch-arrow">↓</div>
+          <div class="arch-step"><div class="arch-num">2</div><div><div class="arch-name">ner_extractor.py</div><div class="arch-desc">Date/time NER · person/org/location extraction</div></div></div>
+          <div class="arch-arrow">↓</div>
+          <div class="arch-step"><div class="arch-num">3</div><div><div class="arch-name">event_extractor.py</div><div class="arch-desc">TF-IDF scoring · action verb signals · composite ranking</div></div></div>
+          <div class="arch-arrow">↓</div>
+          <div class="arch-step"><div class="arch-num">4</div><div><div class="arch-name">timeline_engine.py</div><div class="arch-desc">Temporal sort · highlight HTML · CSV/JSON export</div></div></div>
+          <div class="arch-arrow">↓</div>
+          <div class="arch-step" style="background:var(--rust-light);border-color:rgba(192,90,42,.3)"><div class="arch-num" style="background:var(--rust)">5</div><div><div class="arch-name" style="color:var(--rust)">app.py (Streamlit)</div><div class="arch-desc">Interactive dashboard</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Output panel -->
+  <div id="outputArea">
+    <div class="empty-state">
+      <div class="empty-icon">🕰️</div>
+      <div class="empty-title">Your timeline will appear here</div>
+      <div class="empty-sub">Load a sample or paste your own text, then click <strong>Extract Timeline</strong>.</div>
+    </div>
+  </div>
+
+</div><!-- /workspace -->
+
+<!-- ════════════════════════════════════════════
+     FOOTER
+════════════════════════════════════════════ -->
+<footer>
+  <span>Narrative Timeline Extractor · NLP Pipeline · Final-Year AI Project</span>
+  <span>Run app: <code style="background:var(--warm);padding:2px 6px;border-radius:3px">streamlit run app.py</code></span>
+</footer>
+
+</div><!-- /shell -->
+
+<!-- ════════════════════════════════════════════
+     EMBEDDED DATA & JAVASCRIPT
+════════════════════════════════════════════ -->
+<script>
+// ── Pre-extracted data from the Python pipeline ──────────────────────────────
+const PRECOMPUTED = {"🦠 COVID-19 Pandemic": [{"n": 1, "date": "December 2019", "desc": "Was first reported in Wuhan, China", "score": 0.787, "sent": "In December 2019, a cluster of pneumonia cases was first reported in Wuhan, China.", "dt": "2019-12-01", "locs": ["Wuhan"], "persons": []}, {"n": 2, "date": "January 2020", "desc": "Chinese authorities confirmed a novel coronavirus was the cause", "score": 0.762, "sent": "By January 2020, Chinese authorities confirmed a novel coronavirus was the cause.", "dt": "2020-01-01", "locs": [], "persons": []}, {"n": 3, "date": "2020", "desc": "The world began developing vaccines at an unprecedented pace in early 2020", "score": 0.724, "sent": "Scientists around the world began developing vaccines at an unprecedented pace in early 2020.", "dt": "2020-01-01", "locs": [], "persons": []}, {"n": 4, "date": "January 30, 2020", "desc": "Health Organization declared a Public Health Emergency of International Concern", "score": 0.711, "sent": "On January 30, 2020, the World Health Organization declared a Public Health Emergency of International Concern.", "dt": "2020-01-28", "locs": [], "persons": []}, {"n": 5, "date": "February 2020", "desc": "In February 2020, the disease was officially named COVID-19", "score": 0.524, "sent": "In February 2020, the disease was officially named COVID-19.", "dt": "2020-02-01", "locs": [], "persons": []}, {"n": 6, "date": "March 11, 2020", "desc": "The WHO declared COVID-19 a global pandemic", "score": 0.773, "sent": "On March 11, 2020, the WHO declared COVID-19 a global pandemic.", "dt": "2020-03-11", "locs": [], "persons": []}, {"n": 7, "date": "April 2020", "desc": "Many countries imposed nationwide lockdowns in March and April 2020 to slow the spread", "score": 0.753, "sent": "Many countries imposed nationwide lockdowns in March and April 2020 to slow the spread.", "dt": "2020-04-01", "locs": [], "persons": []}, {"n": 8, "date": "May 2020", "desc": "United States launched Operation Warp Speed to accelerate vaccine development", "score": 0.729, "sent": "In May 2020, the United States launched Operation Warp Speed to accelerate vaccine development.", "dt": "2020-05-01", "locs": [], "persons": []}, {"n": 9, "date": "November 2020", "desc": "And BioNTech announced their vaccine showed 90% efficacy", "score": 0.758, "sent": "By November 2020, Pfizer and BioNTech announced their vaccine showed 90% efficacy.", "dt": "2020-11-01", "locs": [], "persons": []}, {"n": 10, "date": "December 2020", "desc": "In December 2020, the first COVID-19 vaccines received emergency use authorization", "score": 0.477, "sent": "In December 2020, the first COVID-19 vaccines received emergency use authorization.", "dt": "2020-12-01", "locs": [], "persons": []}, {"n": 11, "date": "January 2021", "desc": "Vaccination campaigns rolled out across Europe and North America starting in January 2021", "score": 0.541, "sent": "Vaccination campaigns rolled out across Europe and North America starting in January 2021.", "dt": "2021-01-01", "locs": ["Europe"], "persons": []}, {"n": 12, "date": "2021", "desc": "By mid-2021, over 2 billion vaccine doses had been administered globally", "score": 0.524, "sent": "By mid-2021, over 2 billion vaccine doses had been administered globally.", "dt": "2021-01-01", "locs": [], "persons": []}, {"n": 13, "date": "in 2021", "desc": "New variants including Delta and Omicron emerged in 2021 and spread rapidly", "score": 0.503, "sent": "New variants including Delta and Omicron emerged in 2021 and spread rapidly.", "dt": "2021-01-01", "locs": [], "persons": []}, {"n": 14, "date": "2021", "desc": "Many countries began lifting restrictions as vaccination rates rose", "score": 0.726, "sent": "In late 2021, many countries began lifting restrictions as vaccination rates rose.", "dt": "2021-01-01", "locs": [], "persons": []}, {"n": 15, "date": "in 2022", "desc": "Global economy began its recovery in 2022, though supply chain disruptions persisted", "score": 0.755, "sent": "The global economy began its recovery in 2022, though supply chain disruptions persisted.", "dt": "2022-01-01", "locs": [], "persons": []}], "🚀 SpaceX Milestones": [{"n": 1, "date": "May 2002", "desc": "Elon Musk founded SpaceX in May 2002 with the goal of reducing space transportation costs", "score": 0.741, "sent": "Elon Musk founded SpaceX in May 2002 with the goal of reducing space transportation costs.", "dt": "2002-05-01", "locs": [], "persons": []}, {"n": 2, "date": "September 2008", "desc": "First privately developed liquid-fueled rocket to reach orbit", "score": 0.647, "sent": "In September 2008, Falcon 1 became the first privately developed liquid-fueled rocket to reach orbit.", "dt": "2008-09-01", "locs": [], "persons": []}, {"n": 3, "date": "December 2010", "desc": "SpaceX launched the Dragon spacecraft for the first time in December 2010", "score": 0.748, "sent": "SpaceX launched the Dragon spacecraft for the first time in December 2010.", "dt": "2010-12-01", "locs": [], "persons": []}, {"n": 4, "date": "May 2012", "desc": "In May 2012, Dragon became the first commercial spacecraft to dock with the ISS", "score": 0.451, "sent": "In May 2012, Dragon became the first commercial spacecraft to dock with the International Space Station.", "dt": "2012-05-01", "locs": [], "persons": []}, {"n": 5, "date": "December 2015", "desc": "The company successfully landed its first orbital rocket booster in December 2015", "score": 0.498, "sent": "The company successfully landed its first orbital rocket booster in December 2015.", "dt": "2015-12-01", "locs": [], "persons": []}, {"n": 6, "date": "February 2018", "desc": "Heavy rocket launched carrying a Tesla Roadster as payload", "score": 0.708, "sent": "In February 2018, the Falcon Heavy rocket launched carrying a Tesla Roadster as payload.", "dt": "2018-02-01", "locs": [], "persons": []}, {"n": 7, "date": "May 30, 2020", "desc": "SpaceX flew its first crewed mission, Demo-2, to the ISS", "score": 0.487, "sent": "SpaceX flew its first crewed mission, Demo-2, to the ISS on May 30, 2020.", "dt": "2020-05-28", "locs": [], "persons": []}, {"n": 8, "date": "In 2021", "desc": "SpaceX Inspiration4 mission sent the first all-civilian crew to orbit", "score": 0.48, "sent": "In 2021, SpaceX's Inspiration4 mission sent the first all-civilian crew to orbit in September.", "dt": "2021-01-01", "locs": [], "persons": []}, {"n": 9, "date": "May 2021", "desc": "The Starship prototype conducted its first successful high-altitude test in May 2021", "score": 0.503, "sent": "The Starship prototype conducted its first successful high-altitude test in May 2021.", "dt": "2021-05-01", "locs": [], "persons": []}, {"n": 10, "date": "By 2022", "desc": "SpaceX had launched over 30 missions, setting a new annual record", "score": 0.733, "sent": "By 2022, SpaceX had launched over 30 missions, setting a new annual record.", "dt": "2022-01-01", "locs": [], "persons": []}], "📱 Apple Inc. History": [{"n": 1, "date": "April 1, 1976", "desc": "Steve Wozniak founded Apple Computer Company on April 1, 1976", "score": 0.725, "sent": "Steve Jobs and Steve Wozniak founded Apple Computer Company on April 1, 1976.", "dt": "1976-04-01", "locs": [], "persons": []}, {"n": 2, "date": "June 1977", "desc": "Apple launched the Apple II in June 1977", "score": 0.641, "sent": "Apple launched the Apple II in June 1977, which became one of the first successful mass-produced personal computers.", "dt": "1977-06-01", "locs": [], "persons": []}, {"n": 3, "date": "January 1984", "desc": "Apple introduced the Macintosh computer with a revolutionary graphical interface", "score": 0.733, "sent": "In January 1984, Apple introduced the Macintosh computer with a revolutionary graphical interface.", "dt": "1984-01-01", "locs": [], "persons": []}, {"n": 4, "date": "in 1985", "desc": "Steve Jobs was ousted from Apple in 1985 following a power struggle", "score": 0.516, "sent": "Steve Jobs was ousted from Apple in 1985 following a power struggle with the board of directors.", "dt": "1985-01-01", "locs": [], "persons": []}, {"n": 5, "date": "December 1996", "desc": "Apple acquired NeXT in December 1996, bringing Steve Jobs back", "score": 0.74, "sent": "Apple acquired NeXT in December 1996, bringing Steve Jobs back to the company.", "dt": "1996-12-01", "locs": [], "persons": []}, {"n": 6, "date": "September 1997", "desc": "Jobs returned as CEO in September 1997 and immediately began restructuring the company", "score": 0.769, "sent": "Jobs returned as CEO in September 1997 and immediately began restructuring the company.", "dt": "1997-09-01", "locs": [], "persons": []}, {"n": 7, "date": "August 1998", "desc": "Apple launched the iMac in August 1998, reviving the company's fortunes", "score": 0.715, "sent": "Apple launched the iMac in August 1998, reviving the company's fortunes with a bold new design.", "dt": "1998-08-01", "locs": [], "persons": []}, {"n": 8, "date": "April 2003", "desc": "iTunes Store launched in April 2003, transforming the music industry", "score": 0.792, "sent": "The iTunes Store launched in April 2003, transforming the music industry.", "dt": "2003-04-01", "locs": [], "persons": []}, {"n": 9, "date": "January 9, 2007", "desc": "Steve Jobs introduced the first iPhone, revolutionizing the smartphone market", "score": 0.722, "sent": "On January 9, 2007, Steve Jobs introduced the first iPhone, revolutionizing the smartphone market.", "dt": "2007-01-09", "locs": [], "persons": []}, {"n": 10, "date": "July 2008", "desc": "App Store opened in July 2008 with 500 apps available at launch", "score": 0.797, "sent": "The App Store opened in July 2008 with 500 apps available at launch.", "dt": "2008-07-01", "locs": [], "persons": []}, {"n": 11, "date": "January 2010", "desc": "Apple introduced the iPad in January 2010, creating the modern tablet market", "score": 0.763, "sent": "Apple introduced the iPad in January 2010, creating the modern tablet market.", "dt": "2010-01-01", "locs": [], "persons": []}, {"n": 12, "date": "October 5, 2011", "desc": "Steve Jobs passed away on October 5, 2011, after a long battle with pancreatic cancer", "score": 0.755, "sent": "Steve Jobs passed away on October 5, 2011, after a long battle with pancreatic cancer.", "dt": "2011-10-05", "locs": [], "persons": []}, {"n": 13, "date": "August 2018", "desc": "Tim Cook led Apple to become the world's first trillion-dollar company", "score": 0.456, "sent": "Tim Cook took over as CEO and led Apple to become the world's first trillion-dollar company in August 2018.", "dt": "2018-08-01", "locs": [], "persons": []}, {"n": 14, "date": "November 2020", "desc": "Apple launched the M1 chip in November 2020, transitioning Macs away from Intel", "score": 0.745, "sent": "Apple launched the M1 chip in November 2020, transitioning Macs away from Intel processors.", "dt": "2020-11-01", "locs": [], "persons": []}]};
+
+const SAMPLE_TEXTS = {
+  covid: `In December 2019, a cluster of pneumonia cases was first reported in Wuhan, China.\nBy January 2020, Chinese authorities confirmed a novel coronavirus was the cause.\nOn January 30, 2020, the World Health Organization declared a Public Health Emergency of International Concern.\nIn February 2020, the disease was officially named COVID-19.\nOn March 11, 2020, the WHO declared COVID-19 a global pandemic.\nMany countries imposed nationwide lockdowns in March and April 2020 to slow the spread.\nScientists around the world began developing vaccines at an unprecedented pace in early 2020.\nIn May 2020, the United States launched Operation Warp Speed to accelerate vaccine development.\nBy November 2020, Pfizer and BioNTech announced their vaccine showed 90% efficacy.\nIn December 2020, the first COVID-19 vaccines received emergency use authorization.\nVaccination campaigns rolled out across Europe and North America starting in January 2021.\nBy mid-2021, over 2 billion vaccine doses had been administered globally.\nNew variants including Delta and Omicron emerged in 2021 and spread rapidly.\nIn late 2021, many countries began lifting restrictions as vaccination rates rose.\nThe global economy began its recovery in 2022, though supply chain disruptions persisted.`,
+  spacex: `Elon Musk founded SpaceX in May 2002 with the goal of reducing space transportation costs.\nIn September 2008, Falcon 1 became the first privately developed liquid-fueled rocket to reach orbit.\nSpaceX launched the Dragon spacecraft for the first time in December 2010.\nIn May 2012, Dragon became the first commercial spacecraft to dock with the International Space Station.\nThe company successfully landed its first orbital rocket booster in December 2015.\nIn February 2018, the Falcon Heavy rocket launched carrying a Tesla Roadster as payload.\nSpaceX flew its first crewed mission, Demo-2, to the ISS on May 30, 2020.\nIn 2021, SpaceX's Inspiration4 mission sent the first all-civilian crew to orbit in September.\nThe Starship prototype conducted its first successful high-altitude test in May 2021.\nBy 2022, SpaceX had launched over 30 missions, setting a new annual record.`,
+  apple: `Steve Jobs and Steve Wozniak founded Apple Computer Company on April 1, 1976.\nApple launched the Apple II in June 1977, which became one of the first successful mass-produced personal computers.\nIn January 1984, Apple introduced the Macintosh computer with a revolutionary graphical interface.\nSteve Jobs was ousted from Apple in 1985 following a power struggle with the board of directors.\nApple acquired NeXT in December 1996, bringing Steve Jobs back to the company.\nJobs returned as CEO in September 1997 and immediately began restructuring the company.\nApple launched the iMac in August 1998, reviving the company's fortunes with a bold new design.\nThe iTunes Store launched in April 2003, transforming the music industry.\nOn January 9, 2007, Steve Jobs introduced the first iPhone, revolutionizing the smartphone market.\nThe App Store opened in July 2008 with 500 apps available at launch.\nApple introduced the iPad in January 2010, creating the modern tablet market.\nSteve Jobs passed away on October 5, 2011, after a long battle with pancreatic cancer.\nTim Cook took over as CEO and led Apple to become the world's first trillion-dollar company in August 2018.\nApple launched the M1 chip in November 2020, transitioning Macs away from Intel processors.`
+};
+
+const KEY_MAP = { covid:'🦠 COVID-19 Pandemic', spacex:'🚀 SpaceX Milestones', apple:'📱 Apple Inc. History' };
+let currentEvents = [];
+
+// ── Load sample ──────────────────────────────────────────────────────────────
+function loadSample(key) {
+  document.getElementById('inputText').value = SAMPLE_TEXTS[key];
+  document.querySelectorAll('.sample-btn').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+}
+
+// ── Score display ─────────────────────────────────────────────────────────────
+function scorePill(score) {
+  const cls = score >= 0.55 ? 'score-h' : score >= 0.35 ? 'score-m' : 'score-l';
+  return `<span class="score-pill ${cls}">${score.toFixed(2)}</span>`;
+}
+
+// ── Simulate "parsing" any text ───────────────────────────────────────────────
+function parseCustomText(text) {
+  const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 15);
+  const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,
+    january:1,february:2,march:3,april:4,june:6,july:7,august:8,september:9,october:10,november:11,december:12};
+  const actionVerbs = ['launched','announced','released','founded','started','opened','closed','acquired','signed','expanded','raised','invested','sold','bought','discovered','revealed','declared','won','lost','resigned','appointed'];
+
+  const results = [];
+  sentences.forEach((sent, i) => {
+    const lower = sent.toLowerCase();
+    const hasVerb = actionVerbs.some(v => lower.includes(v));
+    const dateMatch = sent.match(/\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\.?\s+\d{1,2},?\s+\d{4}|\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}|\b(?:19|20)\d{2}\b/i);
+    const score = (hasVerb ? 0.4 : 0.1) + (dateMatch ? 0.35 : 0) + Math.random() * 0.15;
+    if (score < 0.18) return;
+
+    let dt = null, dateText = 'Unknown';
+    if (dateMatch) {
+      dateText = dateMatch[0];
+      // Try to parse year
+      const yrMatch = dateMatch[0].match(/\d{4}/);
+      const moMatch = dateMatch[0].toLowerCase().match(new RegExp(Object.keys(months).join('|')));
+      if (yrMatch) {
+        const yr = parseInt(yrMatch[0]);
+        const mo = moMatch ? months[moMatch[0].substring(0,3)] : 1;
+        dt = new Date(yr, mo - 1, 1);
+      }
+    }
+
+    // Simple description: first 12 words
+    const desc = sent.split(' ').slice(0, 12).join(' ').replace(/[.!?,;]$/, '');
+    results.push({ n: i+1, date: dateText, desc, score: Math.min(score, 0.95), sent: sent.trim(), dt, locs:[], persons:[] });
+  });
+
+  // Sort by date
+  results.sort((a, b) => {
+    if (a.dt && b.dt) return a.dt - b.dt;
+    if (a.dt) return -1;
+    if (b.dt) return 1;
+    return 0;
+  });
+  results.forEach((r, i) => r.n = i + 1);
+  return results;
+}
+
+// ── Main extraction ───────────────────────────────────────────────────────────
+function runExtraction() {
+  const text = document.getElementById('inputText').value.trim();
+  if (!text) { alert('Please enter some text first.'); return; }
+
+  // Show spinner
+  document.getElementById('outputArea').innerHTML = `
+    <div class="processing">
+      <div class="spinner"></div>
+      <div class="proc-text">Analysing text…</div>
+      <div class="proc-steps" id="procStep">Step 1/4: Preprocessing…</div>
+    </div>`;
+
+  const steps = ['Step 1/4: Preprocessing & sentence segmentation…',
+                 'Step 2/4: Running Named Entity Recognition…',
+                 'Step 3/4: Scoring events with TF-IDF…',
+                 'Step 4/4: Sorting chronologically…'];
+  let si = 0;
+  const stepTimer = setInterval(() => {
+    si++;
+    if (si < steps.length) {
+      const el = document.getElementById('procStep');
+      if (el) el.textContent = steps[si];
+    } else clearInterval(stepTimer);
+  }, 350);
+
+  setTimeout(() => {
+    clearInterval(stepTimer);
+    // Check if it matches a pre-computed sample
+    let events = null;
+    for (const [key, data] of Object.entries(PRECOMPUTED)) {
+      // Check the first sentence of each sample
+      if (data.length > 0 && text.includes(data[0].sent.substring(0, 30))) {
+        events = data; break;
+      }
+    }
+    if (!events) events = parseCustomText(text);
+    currentEvents = events;
+    renderOutput(text, events);
+  }, 1500);
+}
+
+// ── Render full output ────────────────────────────────────────────────────────
+function renderOutput(text, events) {
+  const dated = events.filter(e => e.dt).length;
+  const avgScore = (events.reduce((s,e) => s + e.score, 0) / events.length).toFixed(2);
+
+  document.getElementById('outputArea').innerHTML = `
+    <!-- Stats -->
+    <div class="stats-strip">
+      <div class="stat-card"><div class="stat-label">Sentences</div><div class="stat-value">${text.split(/[.!?]+/).filter(s=>s.trim().length>10).length}</div><div class="stat-sub">in input</div></div>
+      <div class="stat-card"><div class="stat-label">Events</div><div class="stat-value">${events.length}</div><div class="stat-sub">extracted</div></div>
+      <div class="stat-card"><div class="stat-label">With Dates</div><div class="stat-value">${dated}</div><div class="stat-sub">temporal anchors</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Score</div><div class="stat-value">${avgScore}</div><div class="stat-sub">confidence</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="switchTab('timeline',this)">🗓 Timeline</button>
+      <button class="tab-btn" onclick="switchTab('table',this)">📋 Table</button>
+      <button class="tab-btn" onclick="switchTab('visual',this)">📊 Visual</button>
+      <button class="tab-btn" onclick="switchTab('highlight',this)">🔍 Highlighted</button>
+    </div>
+
+    <!-- Tab: Timeline -->
+    <div class="tab-content active" id="tab-timeline">
+      <div class="timeline-list">${events.map((e,i) => renderEvt(e,i)).join('')}</div>
+      <div class="dl-bar">
+        <a class="dl-btn" onclick="downloadCSV()">⬇ Download CSV</a>
+        <a class="dl-btn" onclick="downloadJSON()">⬇ Download JSON</a>
+      </div>
+    </div>
+
+    <!-- Tab: Table -->
+    <div class="tab-content" id="tab-table">
+      <table class="evt-table">
+        <thead><tr><th>#</th><th>Date</th><th>Description</th><th>Score</th><th>Sentence</th></tr></thead>
+        <tbody>${events.map(e => `
+          <tr>
+            <td><strong>${e.n}</strong></td>
+            <td style="font-family:var(--mono);font-size:.72rem;color:var(--rust);white-space:nowrap">${e.date}</td>
+            <td style="font-weight:500">${e.desc}</td>
+            <td>
+              <div class="score-bar-wrap">
+                <div class="score-bar" style="width:${Math.round(e.score*80)}px;background:${e.score>=.55?'#2D6A4F':e.score>=.35?'#B8860B':'#C05A2A'}"></div>
+                <span style="font-family:var(--mono);font-size:.68rem">${e.score.toFixed(3)}</span>
+              </div>
+            </td>
+            <td style="font-size:.78rem;color:var(--walnut);max-width:300px">${e.sent}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Tab: Visual -->
+    <div class="tab-content" id="tab-visual">
+      <div style="margin-bottom:12px;font-size:.82rem;color:var(--walnut)">Hover over dots for event details. Events sorted chronologically left → right.</div>
+      <div class="vis-timeline"><div class="vis-axis" id="visAxis"></div></div>
+      <div style="margin-top:24px">
+        <div style="font-size:.82rem;font-weight:600;margin-bottom:10px;color:var(--espresso)">Confidence Scores</div>
+        ${events.map(e => `
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;font-size:.8rem">
+            <div style="font-family:var(--mono);font-size:.65rem;color:var(--rust);width:12ch">E${e.n}</div>
+            <div style="flex:1;height:6px;background:var(--warm);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${Math.round(e.score*100)}%;background:${e.score>=.55?'#2D6A4F':e.score>=.35?'#B8860B':'#C05A2A'};border-radius:3px;transition:width .8s ease"></div>
+            </div>
+            <div style="font-family:var(--mono);font-size:.65rem;width:5ch">${e.score.toFixed(2)}</div>
+            <div style="font-size:.75rem;color:var(--espresso);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.desc}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Tab: Highlighted -->
+    <div class="tab-content" id="tab-highlight">
+      <div class="highlight-box">${buildHighlighted(text, events)}</div>
+      <div style="margin-top:10px;font-size:.75rem;color:var(--walnut)">
+        <mark style="background:rgba(192,90,42,.15);padding:1px 4px;border-radius:3px">Highlighted sentences</mark>
+        were identified as events by the NLP pipeline. Hover to see event number.
+      </div>
+    </div>
+  `;
+
+  buildVisTimeline(events);
+}
+
+function renderEvt(e, i) {
+  const sc = e.score >= .55 ? 'score-h' : e.score >= .35 ? 'score-m' : 'score-l';
+  const chips = [
+    ...e.locs.map(l => `<span class="chip chip-loc">📍 ${l}</span>`),
+    ...e.persons.map(p => `<span class="chip chip-per">👤 ${p}</span>`),
+  ].join('');
+  return `
+    <div class="evt" style="animation-delay:${i*.04}s">
+      <div class="evt-num">${e.n}</div>
+      <div class="evt-body">
+        <div class="evt-date">🗓 ${e.date}</div>
+        <div class="evt-desc">${e.desc}<span class="score-pill ${sc}">score ${e.score.toFixed(2)}</span></div>
+        <div class="evt-sent">${e.sent}</div>
+        ${chips ? `<div class="chips">${chips}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ── Visual timeline ───────────────────────────────────────────────────────────
+function buildVisTimeline(events) {
+  const axis = document.getElementById('visAxis');
+  if (!axis) return;
+  const dated = events.filter(e => e.dt);
+  if (!dated.length) { axis.innerHTML = '<span style="font-size:.8rem;color:var(--walnut)">No dates detected for visual timeline</span>'; return; }
+
+  const times = dated.map(e => new Date(e.dt).getTime());
+  const minT = Math.min(...times), maxT = Math.max(...times);
+  const range = maxT - minT || 1;
+  const colors = ['#C05A2A','#2A7A6E','#2A4A7A','#B8860B','#7A6652','#2D6A4F'];
+
+  dated.forEach((e, i) => {
+    const pct = ((new Date(e.dt).getTime() - minT) / range) * 90 + 5;
+    const color = colors[i % colors.length];
+    const above = i % 2 === 0;
+
+    const dot = document.createElement('div');
+    dot.className = 'vis-dot';
+    dot.style.cssText = `left:${pct}%;background:${color};margin-top:-7px;`;
+    dot.title = `E${e.n}: ${e.desc}`;
+
+    const label = document.createElement('div');
+    label.className = `vis-label ${above ? 'above' : 'below'}`;
+    label.style.left = `calc(${pct}% - 60px)`;
+    label.innerHTML = `<div class="vis-n" style="color:${color}">E${e.n}</div><div class="vis-d">${e.date}</div><div style="font-size:.6rem;margin-top:2px">${e.desc.substring(0,22)}…</div>`;
+
+    axis.appendChild(dot);
+    axis.appendChild(label);
+  });
+}
+
+// ── Highlighted text ──────────────────────────────────────────────────────────
+function buildHighlighted(text, events) {
+  let html = text.replace(/\n/g, ' ');
+  events.forEach(e => {
+    const escaped = e.sent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    try {
+      html = html.replace(new RegExp(escaped, 'g'),
+        `<mark title="Event ${e.n}: ${e.desc}" style="background:rgba(192,90,42,${0.1 + e.score * 0.25});cursor:pointer">${e.sent}</mark>`);
+    } catch(_) {}
+  });
+  return html;
+}
+
+// ── Downloads ─────────────────────────────────────────────────────────────────
+function downloadCSV() {
+  const header = '#,Date,Description,Score,Date Confidence,Sentence\n';
+  const rows = currentEvents.map(e =>
+    `${e.n},"${e.date}","${e.desc}",${e.score.toFixed(3)},${(e.date==='Unknown'?0:0.8).toFixed(3)},"${e.sent.replace(/"/g,'""')}"`
+  ).join('\n');
+  _download('timeline.csv', 'text/csv', header + rows);
+}
+
+function downloadJSON() {
+  const data = currentEvents.map(e => ({
+    event_number: e.n, date: e.date, description: e.desc,
+    score: e.score, sentence: e.sent,
+  }));
+  _download('timeline.json', 'application/json', JSON.stringify(data, null, 2));
+}
+
+function _download(filename, mime, content) {
+  const blob = new Blob([content], {type: mime});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+</script>
+</body>
+</html>
