@@ -1,0 +1,1 @@
+Built an NLP-based tool that extracts important events and dates from unstructured text and organizes them into chronological timelines. Implemented NER, POS tagging, regex-based temporal extraction, and TF-IDF scoring with interactive visualizations for easier analysis and summarization.
